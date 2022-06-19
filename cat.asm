@@ -10,6 +10,12 @@ F_OPEN      .equ 15
 F_READ      .equ 20
 F_DMAOFF    .equ 26
 
+; Serial IO Settings
+SERDATA     .equ 4
+SERSTATUS   .equ 6
+TXRDY       .equ 4
+RXRDY       .equ 1
+
 ; File Control Block (like a file handle in Unix)
 ; http://seasip.info/Cpm/fcb.html
 ; http://www.gaby.de/cpm/manuals/archive/cpm22htm/ch5.htm#Figure_5-2
@@ -21,6 +27,12 @@ buff        .equ 0x0080         ; Default location for 128 byte DMA buffer
     .org 0x100
 
 start:
+    nop
+    nop
+    ; Get return pointer and set up stack
+    pop bc
+    ld sp, stack
+    push bc
     ; Open file
     ld c, F_OPEN
     ld de, fcb
@@ -79,9 +91,19 @@ print_loop:
         call bdos
     pop hl \ pop de \ pop bc
     push bc \ push de \ push hl
+	ld a, e
+
         ; Print to serial
-        ld c, A_WRITE
-        call bdos
+sertx:
+        push af
+sertxwait:
+		in a, (SERSTATUS)
+		and TXRDY
+		jr z, sertxwait
+        pop af
+	out (SERDATA), a
+        ; ret
+
     pop hl \ pop de \ pop bc
 
     ; Adjust counters and loop
@@ -145,6 +167,10 @@ err_unknown:
 
 string:
     .db "Hello World!\n$", 0
+
+.fill 15
+stack:
+    .dw 0
 
 ;fcb:
 ;    .db 0               ; Drive - 0 = Default

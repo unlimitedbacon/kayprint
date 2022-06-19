@@ -3,12 +3,18 @@
 bdos        .equ 0x0005
 C_READ      .equ 1
 C_WRITE     .equ 2
-A_READ      .equ 3
-A_WRITE     .equ 4
+A_READ      .equ 3	; Reader (RDR) input
+A_WRITE     .equ 4	; Punch (PUN) output
 C_WRITESTR  .equ 9
 F_OPEN      .equ 15
 F_READ      .equ 20
 F_DMAOFF    .equ 26
+
+; Serial IO Settings (modem port)
+SERDATA     .equ 4
+SERSTATUS   .equ 6
+TXRDY       .equ 4
+RXRDY       .equ 1
 
 ; File Control Block (like a file handle in Unix)
 ; http://seasip.info/Cpm/fcb.html
@@ -16,12 +22,19 @@ F_DMAOFF    .equ 26
 fcb         .equ 0x005c         ; FCB automatically created from first CLI argument
 fcb_cr      .equ fcb + 0x20 
 
-buff        .equ 0x0080         ; Default location for 128 byte DMA buffer
+buff        .equ 0x0080         ; Default location for 128 byte DMA buffer for file reads
 ring        .equ 0x1000         ; Ring buffer for storing responses from serial
+
 
     .org 0x100
 
 start:
+    nop
+    nop
+    ; Get return pointer and set up stack
+    pop bc
+    ld sp, stack
+    push bc
     ; Open file
     ld c, F_OPEN
     ld de, fcb
@@ -85,10 +98,8 @@ print_loop:
     jr z, _
 
     ; Print character from buffer to serial port
-    push bc \ push de \ push hl
-        ld c, A_WRITE
-        call bdos
-    pop hl \ pop de \ pop bc
+    ld a, e
+    call ser_tx
 
     ; If we just sent a \n, wait for a reponse
 _:  ld a, '\n'
@@ -105,10 +116,8 @@ _:  ld a, '\n'
         ld hl, ring
 read_loop:
         ; Get a char over serial
-        ld c, A_READ
-        push hl
-            call bdos
-        pop hl
+        call ser_rx_wait
+
         ; Put character into ring buffer
         ld (hl), a
         ; Echo character to console
@@ -150,13 +159,56 @@ skip_read:
     ; Adjust counters and loop
     inc hl
     dec b
-    jr nz, print_loop
-    jr buffer_loop
+    jp nz, print_loop
+    jp buffer_loop
 
 end:
     ret
 
+; Subroutines
+; ===========
+
+;; ser_tx
+;;  Send byte to serial port
+;;  Blocks until serial port is ready
+;; Inputs:
+;;  A: Byte to send
+ser_tx:
+    push af
+ser_tx_wait:
+        in a, (SERSTATUS)
+        and TXRDY
+        jr z, ser_tx_wait
+    pop af
+	out (SERDATA), a
+    ret
+
+
+;; ser_rx
+;;  Receive byte from serial port
+;;  Non-blocking
+;; Outputs:
+;;  A: Byte read (if available)
+;;  F: NZ if success, Z if no byte available
+ser_rx:
+    in a, (SERSTATUS)
+    and RXRDY
+    ret z
+    in a, (SERDATA)
+    ret
+
+;; ser_rx_wait
+;;  Receive byte from serial port
+;;  Waits until a byte is available
+;; Outputs:
+;;  A: Byte read
+ser_rx_wait:
+    call ser_rx
+    jr z, ser_rx_wait
+    ret
+
 ;; read_error
+;;  Prints error code encountered when reading file
 ;; Inputs:
 ;;  A: Error code
 ;; Overwrites C, DE
@@ -187,10 +239,12 @@ _:  cp 0xff
     ld de, err_hardware
     call bdos
     ret
-_:  ld de, err_media_chng
+_:  ld de, err_unknown
     call bdos
     ret
 
+; String Constants
+; ================
 err_open:
     .db "\nErr: Couldn't open file\n$"
 err_eof:
@@ -206,8 +260,15 @@ err_hardware:
 err_unknown:
     .db "\nUnknown Error\n$"
 
-string:
-    .db "Hello World!\n$", 0
+; Stack area
+; ==========
+.fill 15
+stack:
+    .dw 0
+
+; Variables
+; =========
+last_line:  .dw ring
 
 ;fcb:
 ;    .db 0               ; Drive - 0 = Default
@@ -220,5 +281,3 @@ string:
 ;    .db 0               ; CR
 ;    .db 0,0,0           ; R1, R2, R3
 
-ring_buffer:
-    .db 0
