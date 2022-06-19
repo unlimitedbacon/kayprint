@@ -1,3 +1,6 @@
+; cat
+; Dumps a file to screen as well as serial output
+
 ; CPM BDOS System Calls
 ; https://seasip.info/Cpm/bdosfunc.html
 bdos        .equ 0x0005
