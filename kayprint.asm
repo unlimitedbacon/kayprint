@@ -1,3 +1,7 @@
+; Kayprint
+; ========
+; A CPM program for controlling 3D printers over serial
+
 ; CPM BDOS System Calls
 ; https://seasip.info/Cpm/bdosfunc.html
 bdos        .equ 0x0005
@@ -5,12 +9,15 @@ C_READ      .equ 1
 C_WRITE     .equ 2
 A_READ      .equ 3	; Reader (RDR) input
 A_WRITE     .equ 4	; Punch (PUN) output
+C_RAWIO     .equ 6
 C_WRITESTR  .equ 9
+C_STAT      .equ 11
 F_OPEN      .equ 15
 F_READ      .equ 20
 F_DMAOFF    .equ 26
 
 ; Serial IO Settings (modem port)
+; These values are for a Kaypro II
 SERDATA     .equ 4
 SERSTATUS   .equ 6
 TXRDY       .equ 4
@@ -19,11 +26,11 @@ RXRDY       .equ 1
 ; File Control Block (like a file handle in Unix)
 ; http://seasip.info/Cpm/fcb.html
 ; http://www.gaby.de/cpm/manuals/archive/cpm22htm/ch5.htm#Figure_5-2
-fcb         .equ 0x005c         ; FCB automatically created from first CLI argument
+fcb         .equ 0x005c         ; FCB automatically created by CPM from first CLI argument
 fcb_cr      .equ fcb + 0x20 
 
 buff        .equ 0x0080         ; Default location for 128 byte DMA buffer for file reads
-ring        .equ 0x1000         ; Ring buffer for storing responses from serial
+ring        .equ 0x1000         ; Our ring buffer for storing responses from serial
 
 
     .org 0x100
@@ -175,10 +182,11 @@ end:
 ;;  A: Byte to send
 ser_tx:
     push af
-ser_tx_wait:
+ser_tx_loop:
+        call check_kbd
         in a, (SERSTATUS)
         and TXRDY
-        jr z, ser_tx_wait
+        jr z, ser_tx_loop
     pop af
 	out (SERDATA), a
     ret
@@ -203,8 +211,34 @@ ser_rx:
 ;; Outputs:
 ;;  A: Byte read
 ser_rx_wait:
+    call check_kbd
     call ser_rx
     jr z, ser_rx_wait
+    ret
+
+;; check_kbd
+;;  Checks if a key has been pressed and acts accordingly
+check_kbd:
+    ;; Get character from console
+    push bc \ push de \ push hl
+        ld c, C_RAWIO
+        ld e, 0xFF  ; Read without echoing
+        call bdos
+    pop hl \ pop de \ pop bc
+    ;; Return if 0 (no char waiting)
+    or a
+    ret z
+    ;; Check escape key
+    cp 0x1b
+    call z, bail
+    ret
+ 
+;; bail
+;;  Exit program and return to CPM
+bail:
+    ;; Load CPM return address from bottom of stack
+    ld sp, stack-2
+    ;; Return to CPM
     ret
 
 ;; read_error
@@ -262,7 +296,7 @@ err_unknown:
 
 ; Stack area
 ; ==========
-.fill 15
+.fill 32    ; 16 stack entries
 stack:
     .dw 0
 
