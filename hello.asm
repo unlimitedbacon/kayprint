@@ -1,7 +1,7 @@
-bdos     .equ 0x0005
-printstr .equ 9
+bdos     equ 0x0005
+printstr equ 9
 
-    .org 0x100
+    org 0x100
 
 start:
     ld c, printstr
@@ -10,4 +10,4 @@ start:
     ret
 
 string:
-    .db "Hello World!\n$", 0
+    db "Hello World!\n$", 0

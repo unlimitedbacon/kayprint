@@ -277,6 +277,8 @@ _:  ld de, err_unknown
     call bdos
     ret
 
+#include "strings.asm"
+
 ; String Constants
 ; ================
 err_open:

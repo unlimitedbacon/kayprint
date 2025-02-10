@@ -1,2 +1,7 @@
 *.com
 *.COM
+roms/*
+disks/*
+out/*
+.tmp
+cfg
