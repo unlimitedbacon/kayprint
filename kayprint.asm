@@ -4,36 +4,36 @@
 
 ; CPM BDOS System Calls
 ; https://seasip.info/Cpm/bdosfunc.html
-bdos        .equ 0x0005
-C_READ      .equ 1
-C_WRITE     .equ 2
-A_READ      .equ 3	; Reader (RDR) input
-A_WRITE     .equ 4	; Punch (PUN) output
-C_RAWIO     .equ 6
-C_WRITESTR  .equ 9
-C_STAT      .equ 11
-F_OPEN      .equ 15
-F_READ      .equ 20
-F_DMAOFF    .equ 26
+bdos        equ 0x0005
+C_READ      equ 1
+C_WRITE     equ 2
+A_READ      equ 3	; Reader (RDR) input
+A_WRITE     equ 4	; Punch (PUN) output
+C_RAWIO     equ 6
+C_WRITESTR  equ 9
+C_STAT      equ 11
+F_OPEN      equ 15
+F_READ      equ 20
+F_DMAOFF    equ 26
 
 ; Serial IO Settings (modem port)
 ; These values are for a Kaypro II
-SERDATA     .equ 4
-SERSTATUS   .equ 6
-TXRDY       .equ 4
-RXRDY       .equ 1
+SERDATA     equ 4
+SERSTATUS   equ 6
+TXRDY       equ 4
+RXRDY       equ 1
 
 ; File Control Block (like a file handle in Unix)
 ; http://seasip.info/Cpm/fcb.html
 ; http://www.gaby.de/cpm/manuals/archive/cpm22htm/ch5.htm#Figure_5-2
-fcb         .equ 0x005c         ; FCB automatically created by CPM from first CLI argument
-fcb_cr      .equ fcb + 0x20 
+fcb         equ 0x005c         ; FCB automatically created by CPM from first CLI argument
+fcb_cr      equ fcb + 0x20 
 
-buff        .equ 0x0080         ; Default location for 128 byte DMA buffer for file reads
-ring        .equ 0x1000         ; Our ring buffer for storing responses from serial
+buff        equ 0x0080         ; Default location for 128 byte DMA buffer for file reads
+ring        equ 0x1000         ; Our ring buffer for storing responses from serial
 
 
-    .org 0x100
+    org 0x100
 
 start:
     nop
@@ -48,12 +48,12 @@ start:
     call bdos
     ; Error if file not found
     cp 4
-    jr c, _
+    jr c, @ok
     ld c, C_WRITESTR
     ld de, err_open
     call bdos
     jp end
-_:
+@ok:
 
     ; Set CR to 0 to read from start of file
     xor a
@@ -72,13 +72,13 @@ buffer_loop:
 
     ; Check if that was the last chunk of file
     or a
-    jr z, _
+    jr z, @ok
     ;cp 1
     ;jr z, end
     ; Report errors
     call read_error
     jr end
-_:
+@ok:
 
     ; Loop through the buffer
     ld b, 128
@@ -102,14 +102,15 @@ print_loop:
     ; Smoothieware sends double OKs if you use CRLF line endings
     ld a, '\r'
     cp e
-    jr z, _
+    jr z, @skip_print
 
     ; Print character from buffer to serial port
     ld a, e
     call ser_tx
 
     ; If we just sent a \n, wait for a reponse
-_:  ld a, '\n'
+@skip_print:
+    ld a, '\n'
     cp e
     jr nz, skip_read
 
@@ -137,24 +138,24 @@ read_loop:
         ; For some reason smoothie sends both -_-
         push hl
             cp '\n'
-            jr nz, ++_
+            jr nz, @no_ok
             dec l
             ld a, (hl)
             cp '\r'
-            jr nz, _
+            jr nz, @cpk
             dec l
             ld a, (hl)
-_:          cp 'k'
-            jr nz, _
+@cpk:       cp 'k'
+            jr nz, @no_ok
             dec l
             ld a, (hl)
             cp 'o'
-            jr nz, _
+            jr nz, @no_ok
             ; Continue
         pop hl
         jr read_done
             
-_:
+@no_ok:
         pop hl
         inc l       ; Will overflow at 256 bytes, so we have a 256 byte ring buffer
         jr read_loop
@@ -249,62 +250,67 @@ bail:
 read_error:
     ld c, C_WRITESTR
     cp 1
-    jr nz, _
+    jr nz, @err9
     ld de, err_eof
     call bdos
     ret
-_:  cp 9
-    jr nz, _
+@err9:
+    cp 9
+    jr nz, @err10
     ld de, err_fcb
     call bdos
     ret
-_:  cp 10
-    jr nz, _
+@err10:
+    cp 10
+    jr nz, @err11
     ld de, err_media_chng
     call bdos
     ret
-_:  cp 11
-    jr nz, _
+@err11:
+    cp 11
+    jr nz, @errFF
     ld de, err_unlock
     call bdos
     ret
-_:  cp 0xff
-    jr nz, _
+@errFF:
+    cp 0xff
+    jr nz, @err_unk
     ld de, err_hardware
     call bdos
     ret
-_:  ld de, err_unknown
+@err_unk:
+    ld de, err_unknown
     call bdos
     ret
 
-#include "strings.asm"
+;#include "strings.asm"
 
 ; String Constants
 ; ================
 err_open:
-    .db "\nErr: Couldn't open file\n$"
+    db "\nErr: Couldn't open file\n$"
 err_eof:
-    .db "\nErr 01: End Of File\n$"
+    db "\nErr 01: End Of File\n$"
 err_fcb:
-    .db "\nErr 09: Invalid FCB\n$"
+    db "\nErr 09: Invalid FCB\n$"
 err_media_chng:
-    .db "\nErr 10: Media changed\n$"
+    db "\nErr 10: Media changed\n$"
 err_unlock:
-    .db "\nErr 11: Unlocked file verification\n$"
+    db "\nErr 11: Unlocked file verification\n$"
 err_hardware:
-    .db "\nErr_255: Hardware error\n$"
+    db "\nErr_255: Hardware error\n$"
 err_unknown:
-    .db "\nUnknown Error\n$"
+    db "\nUnknown Error\n$"
 
 ; Stack area
 ; ==========
-.fill 32    ; 16 stack entries
+    defs 32, 0  ; 16 stack entries
 stack:
-    .dw 0
+    dw 0
 
 ; Variables
 ; =========
-last_line:  .dw ring
+last_line:  dw ring
 
 ;fcb:
 ;    .db 0               ; Drive - 0 = Default

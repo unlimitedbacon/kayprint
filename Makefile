@@ -1,4 +1,4 @@
-name := hello
+name := kayprint
 
 build:
 	# Assemble program

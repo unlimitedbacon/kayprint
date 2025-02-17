@@ -15,9 +15,9 @@
         "startAutomatically": false,
         "z88dkv2": [
             {
-                "path": "out/hello.lis",
+                "path": "out/kayprint.lis",
                 "srcDirs": [""],
-                "mapFile": "out/hello.map"
+                "mapFile": "out/kayprint.map"
             }
         ],
         "history": {
