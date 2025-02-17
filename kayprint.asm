@@ -33,7 +33,7 @@ buff        equ 0x0080         ; Default location for 128 byte DMA buffer for fi
 ring        equ 0x1000         ; Our ring buffer for storing responses from serial
 
 
-    org 0x100
+    org 0x100   ; Loading address for CP/M programs
 
 start:
     nop

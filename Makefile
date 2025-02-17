@@ -8,7 +8,7 @@ build:
 	#mv kayprint.lst out/kayprint.lst
 	z88dk-z80asm -O=out -b -l -m $(name).asm
 	# Create disk image
-	z88dk-appmake +cpmdisk -f kayproii -b out/$(name).bin -o out/$(name).dsk
+	z88dk-appmake +cpmdisk -f kayproii -b out/$(name).bin -a test_data/cube.gco -o out/$(name).dsk
 
 run: build
 	/usr/bin/mame \
@@ -21,7 +21,10 @@ run: build
 		-bitbanger socket.127.0.0.1:2023 \
 		-verbose \
 		-w -nomax \
-		-cheat
+		-skip_gameinfo \
+		-cheat &
+	sleep 1
+	python fakeprinter.py
 
 debug: build
 	/usr/bin/mame \
@@ -34,10 +37,13 @@ debug: build
 		-bitbanger socket.127.0.0.1:2023 \
 		-verbose \
 		-w -nomax \
+		-skip_gameinfo \
 		-cheat \
 		-debugger gdbstub \
 		-debug \
-		-debugger_port 12000
+		-debugger_port 12000 &
+	sleep 1
+	python fakeprinter.py
 
 clean:
 	rm out/*
